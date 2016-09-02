@@ -1,0 +1,315 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "resourcePrefix": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "my-",
+      "metadata": {
+        "description": "Prefix to use when naming resouces."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Username for the Virtual Machine."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the Virtual Machine."
+      }
+    },
+    "dnsNameForPublicIP": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Globally unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "virtualNetworkResourceGroup": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The name of the virtual network resource group to connect to."
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The name of the virtual network to connect to."
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The name of the subnet to connect to."
+      }
+    },
+    "subnetIPAddressPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix for Event Store node IP addresses. Important: node numbers are appended."
+      }
+    },
+    "ubuntuOSVersion": {
+      "type": "string",
+      "defaultValue": "14.04.5-LTS",
+      "metadata": {
+        "description": "The Ubuntu version for deploying the Docker containers. This will pick a fully patched image of this given Ubuntu version. Allowed values: 14.04.2-LTS, 14.04-DAILY, 15.04"
+      },
+      "allowedValues": [
+        "14.04.5-LTS",
+        "14.04-DAILY",
+        "15.10"
+      ]
+    },
+    "dockerHubImage": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The name of the DockerHub image to pass through to Docker compose on the VM."
+      }
+    },
+    "targetEnvironment" : {
+      "type" : "string",
+      "metadata": {
+        "description": "CI, UAT, Prod etc."
+      }
+    },
+    "vhdStorageName" : {
+      "type" : "string",
+      "metadata" : {
+        "description" : "The vhd storage name."
+      }
+    },
+    "numberOfNodes" : {
+      "type" : "int",
+      "metadata": {
+         "description":"The total number of nodes in the cluster."
+      }
+    },
+    "nodeNumbers": {
+      "type" : "array",
+      "metadata": {
+         "description":"Node numbers to deploy. 1, 2, 3 etc. Must be defined."
+      }
+    }
+  },
+  "variables": {
+    "imagePublisher": "Canonical",
+    "imageOffer": "UbuntuServer",
+    "OSDiskName": "osdisk-esnode",
+    "DataDiskName": "datadisk-esnode",
+    "nicName": "[concat(parameters('resourcePrefix'), 'vm-nic')]",
+    "vhdStorageName": "[parameters('vhdStorageName')]",
+    "vhdStorageContainerName": "vhds",
+    "publicIPAddressName": "[concat(parameters('resourcePrefix'), 'public-ip')]",
+    "publicIPAddressType": "Static",
+    "vmName": "[concat(parameters('resourcePrefix'), 'vm')]",
+    "vmSize": "Standard_DS1",
+    "vnetId": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+    "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]",
+    "scriptVmDiskUtils": "[concat('https://deploystorage', parameters('targetEnvironment'), '.blob.core.windows.net/files/01301051-2ef4-4b18-bcd9-455f5396b77b/vm-disk-utils-0.1.sh')]",
+    "scriptPrepareVm": "[concat('https://deploystorage', parameters('targetEnvironment'), '.blob.core.windows.net/files/01301051-2ef4-4b18-bcd9-455f5396b77b/prepare-vm.sh')]",
+    "eventstoreRunCommand": "[concat('./run-node.sh --db /data/db --log /data/logs --mono-min-threadpool-size=100 --ext-ip=0.0.0.0 --int-ip=0.0.0.0 --int-http-prefixes=http://*:2112/ --ext-http-prefixes=http://*:2113/ --int-http-port=2112 --ext-http-port=2113 --int-tcp-port=1112 --ext-tcp-port=1113 --discover-via-dns=false --cluster-size=', parameters('numberOfNodes'))]"
+  },
+  "resources": [
+    {
+      "copy": {
+        "name": "pubipcopy",
+        "count": "[parameters('numberOfNodes')]"
+      },
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "tags": {
+        "displayName": "PublicIPAddress"
+      },
+      "name": "[concat(parameters('dnsNameForPublicIP'), '-n', copyIndex(1), '-', parameters('targetEnvironment'))]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(parameters('dnsNameForPublicIP'), '-n', copyIndex(1), '-', parameters('targetEnvironment'))]"
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "niccopy",
+        "count": "[parameters('numberOfNodes')]"
+      },
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('nicName'), copyIndex(1), '-', parameters('targetEnvironment'))]",
+      "tags": {
+        "displayName": "NetworkInterface"
+      },
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "pubipcopy"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "[concat('ipconfig', copyIndex(1))]",
+            "properties": {
+              "privateIPAddress":"[concat(parameters('subnetIPAddressPrefix'), copyIndex(1))]",
+              "privateIPAllocationMethod": "Static",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('dnsNameForPublicIP'), '-n', copyIndex(1), '-', parameters('targetEnvironment')))]"
+              },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "copy": {
+        "name": "vmcopies",
+        "count": "[parameters('numberOfNodes')]"
+      },
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[concat(variables('vmName'),copyIndex(1), '-', parameters('targetEnvironment'))]",
+      "tags": {
+        "displayName": "VirtualMachine"
+      },
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "niccopy"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[variables('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('imagePublisher')]",
+            "offer": "[variables('imageOffer')]",
+            "sku": "[parameters('ubuntuOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[concat('eventstore-osdisk', copyIndex(1), '-', parameters('targetEnvironment'))]",
+            "vhd": {
+              "uri": "[concat('http://', variables('vhdStorageName'), '.blob.core.windows.net/', variables('vhdStorageContainerName'), copyIndex(1), '-', parameters('targetEnvironment'), '/', variables('OSDiskName'), '.vhd')]"
+            },
+            "caching": "None",
+            "createOption": "FromImage"
+          },
+          "dataDisks": [
+            {
+              "name": "[concat('eventstore-datadisk', copyIndex(1), '-', parameters('targetEnvironment'))]",
+              "vhd": {
+                "uri": "[concat('http://', variables('vhdStorageName'), '.blob.core.windows.net/', variables('vhdStorageContainerName'), copyIndex(1), '-', parameters('targetEnvironment'), '/', variables('DataDiskName'), '.vhd')]"
+              },
+              "diskSizeGB": "25",
+              "lun": 0,
+              "caching": "None",
+              "createOption": "Empty"
+            }
+          ]
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('nicName'), copyIndex(1), '-', parameters('targetEnvironment')))]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "setupvmcopies",
+        "count": "[parameters('numberOfNodes')]"
+      },
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(variables('vmName'), copyIndex(1), '-', parameters('targetEnvironment'),'/setup-vm')]",
+      "tags": {
+        "displayName": "Setup VM"
+      },
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "vmcopies"
+      ],
+      "properties": {
+        "publisher": "Microsoft.OSTCExtensions",
+        "type": "CustomScriptForLinux",
+        "typeHandlerVersion": "1.5",
+        "settings": {
+          "fileUris": [
+            "[variables('scriptVmDiskUtils')]",
+            "[variables('scriptPrepareVm')]"
+          ],
+          "commandToExecute": "bash prepare-vm.sh",
+          "timestamp": 3
+        }
+      }
+    },
+    {
+      "copy":{
+         "name":"dockerNodeCopy",
+         "count":"[length(parameters('nodeNumbers'))]"
+      },
+      "type":"Microsoft.Compute/virtualMachines/extensions",
+      "name":"[concat(variables('vmName'), parameters('nodeNumbers')[copyIndex()], '-', parameters('targetEnvironment'), '/docker')]",
+      "tags":{
+         "displayName":"[concat('Docker', parameters('nodeNumbers')[copyIndex()], '-', parameters('targetEnvironment'))]"
+      },
+      "apiVersion":"2015-06-15",
+      "dependsOn": [
+        "setupvmcopies"
+      ],
+      "location":"[resourceGroup().location]",
+      "properties":{
+         "publisher":"Microsoft.Azure.Extensions",
+         "type":"DockerExtension",
+         "typeHandlerVersion":"1.0",
+         "autoUpgradeMinorVersion":true,
+         "settings":{
+            "docker":{
+               "options":[
+                  "-H unix:///var/run/docker.sock"
+               ]
+            },
+            "compose":{
+              "eventstore": {
+                "image": "[parameters('dockerHubImage')]",
+                "ports": [
+                  "1112:1112",
+                  "1113:1113",
+                  "1114:1114",
+                  "1115:1115",
+                  "2112:2112",
+                  "2113:2113"
+                ],
+                "volumes": [
+                  "/datadisks/disk1/eventstore/db:/data/db",
+                  "/datadisks/disk1/eventstore/logs:/data/logs"
+                ],
+                "restart": "always",
+                "command": "[concat(variables('eventstoreRunCommand'), ' --gossip-seed=', reference(concat('Microsoft.Network/publicIPAddresses/', parameters('dnsNameForPublicIP'), '-n1-', parameters('targetEnvironment'))).ipAddress, ':2112,', reference(concat('Microsoft.Network/publicIPAddresses/', parameters('dnsNameForPublicIP'), '-n2-', parameters('targetEnvironment'))).ipAddress, ':2112,', reference(concat('Microsoft.Network/publicIPAddresses/', parameters('dnsNameForPublicIP'), '-n3-', parameters('targetEnvironment'))).ipAddress, ':2112', ' --int-ip-advertise-as=',parameters('subnetIPAddressPrefix'), parameters('nodeNumbers')[copyIndex()], ' --ext-ip-advertise-as=', reference(concat('Microsoft.Network/publicIPAddresses/', parameters('dnsNameForPublicIP'), '-n', copyIndex(1), '-', parameters('targetEnvironment'))).ipAddress)]"
+              }
+            },
+            "installonly":"true"
+          }
+      }
+   }
+  ]
+}

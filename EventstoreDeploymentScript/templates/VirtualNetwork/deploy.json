@@ -1,0 +1,80 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualNetworkName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "my-",
+      "metadata": {
+        "description": "The name of the virtual network"
+      }
+    },
+    "addressPrefix": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "192.168.128.0/17",
+      "metadata": {
+        "description": "The address prefix for the virtual network."
+      }
+    },
+    "backendSubnetPrefix": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "192.168.129.0/24",
+      "metadata": {
+        "description": "The backend subnet address prefix. Must be part of the virtual network address prefix."
+      }
+    },
+    "backendSubnetName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "Backend Subnet",
+      "metadata": {
+        "description": "The name of the backend subnet."
+      }
+    }
+  },
+  "variables": {
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('virtualNetworkName')]",
+      "tags": {
+        "displayName": "VirtualNetwork"
+      },
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('backendSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('backendSubnetPrefix')]"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "resourceGroup": {
+      "type": "string",
+      "value": "[resourceGroup().name]"
+    },
+    "location": {
+      "type": "string",
+      "value": "[resourceGroup().location]"
+    },
+	"vnetName": {
+      "type": "string",
+      "value": "[parameters('virtualNetworkName')]"
+    }
+  }
+}
