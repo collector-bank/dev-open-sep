@@ -1,4 +1,10 @@
-﻿set-strictmode -version 3
+﻿# Demo script from Collector Developer Open Sept 1st 2016
+#
+# http://www.meetup.com/Collector-Bank/events/233364939
+# https://github.com/collector-bank/dev-open-sep
+
+
+set-strictmode -version 3
 
 . ./scripts/azure-rm-helpers.ps1
 
