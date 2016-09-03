@@ -1,0 +1,18 @@
+﻿{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualNetworkName": {
+            "value": "vnet-demo"
+        },
+        "addressPrefix": {
+            "value": "192.168.128.0/17"
+        },
+        "backendSubnetPrefix": {
+            "value": "192.168.129.0/24"
+        },
+        "backendSubnetName": {
+            "value": "backendsubnet-test"
+        }
+    }
+}

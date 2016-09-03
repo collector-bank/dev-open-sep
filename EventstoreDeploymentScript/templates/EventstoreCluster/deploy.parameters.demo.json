@@ -1,0 +1,45 @@
+﻿{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourcePrefix": {
+            "value": "demo-es-"
+        },
+        "dnsNameForPublicIP": {
+            "value": "collector-demo-eventstore"
+        },
+        "virtualNetworkResourceGroup": {
+            "value": ""
+        },
+        "virtualNetworkName": {
+            "value": "vnet-demo"
+        },
+        "subnetName": {
+            "value": "backendsubnet-test"
+        },
+		"subnetIPAddressPrefix": {
+			"value": "192.168.129.1"
+		},
+        "dockerHubImage": {
+            "value": "marcusparkkinen/checkout-docker:v1.1"
+        },
+        "adminUsername": {
+            "value": "devopen"
+        },
+        "adminPassword": {
+            "value": "Devopen1"
+          },
+        "targetEnvironment": {
+            "value" : "demo"
+        },
+        "vhdStorageName": {
+            "value" : "esstoragedemo"
+        },
+        "numberOfNodes": {
+            "value": 3
+        },
+        "nodeNumbers": {
+            "value": ["1", "2", "3"]
+        }
+    }
+}
